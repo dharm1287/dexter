@@ -3,6 +3,7 @@ tool calls, and feeds results back until the model is done responding."""
 
 import json
 
+import groq
 from groq import Groq
 
 from . import config
@@ -25,19 +26,56 @@ def dispatch_tool_call(tools: ProjectTools, name: str, arguments: dict) -> str:
         return f"Error running tool '{name}': {e}"
 
 
+def _create_completion_with_retry(client: Groq, messages: list):
+    """Call the Groq chat completion API, retrying at a lower temperature
+    if the model emits a malformed tool call (a known occasional issue
+    with some models, surfaced by Groq as a 400 tool_use_failed error)."""
+    temperature = config.DEFAULT_TEMPERATURE
+    last_error = None
+
+    for attempt in range(1 + config.MAX_TOOL_CALL_RETRIES):
+        try:
+            return client.chat.completions.create(
+                model=config.MODEL,
+                max_tokens=config.MAX_TOKENS,
+                temperature=temperature,
+                messages=messages,
+                tools=TOOLS,
+                tool_choice="auto",
+            )
+        except groq.BadRequestError as e:
+            body = getattr(e, "body", None) or {}
+            code = (body.get("error") or {}).get("code") if isinstance(body, dict) else None
+            if code != "tool_use_failed":
+                raise  # a different kind of error; don't swallow it
+
+            last_error = e
+            temperature = config.TOOL_CALL_RETRY_TEMPERATURE
+            print(
+                f"  [warning] model produced a malformed tool call, "
+                f"retrying (attempt {attempt + 2}/{1 + config.MAX_TOOL_CALL_RETRIES})..."
+            )
+
+    raise last_error
+
+
 def run_agent(client: Groq, tools: ProjectTools, user_message: str, history: list) -> list:
     """Send one user message through the agent loop, mutating and
     returning the updated conversation history."""
     history.append({"role": "user", "content": user_message})
 
     for _ in range(config.MAX_TOOL_ITERATIONS):
-        response = client.chat.completions.create(
-            model=config.MODEL,
-            max_tokens=config.MAX_TOKENS,
-            messages=[{"role": "system", "content": SYSTEM_PROMPT}] + history,
-            tools=TOOLS,
-            tool_choice="auto",
-        )
+        try:
+            response = _create_completion_with_retry(
+                client, [{"role": "system", "content": SYSTEM_PROMPT}] + history
+            )
+        except groq.BadRequestError:
+            print(
+                "\n[Error] The model repeatedly failed to format a tool call "
+                "correctly, even after retrying. Try rephrasing your request "
+                "more specifically (e.g. name the exact file), or try again."
+            )
+            break
 
         message = response.choices[0].message
 

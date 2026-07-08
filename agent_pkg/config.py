@@ -10,6 +10,9 @@ load_dotenv()
 MODEL = "llama-3.3-70b-versatile"
 MAX_TOKENS = 4096
 MAX_TOOL_ITERATIONS = 15  # safety cap so a stuck loop can't run forever
+DEFAULT_TEMPERATURE = 0.2  # lower temperature = more reliable tool-call formatting
+TOOL_CALL_RETRY_TEMPERATURE = 0.0  # used when a tool call fails to parse
+MAX_TOOL_CALL_RETRIES = 2
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
