@@ -7,7 +7,10 @@ from dotenv import load_dotenv
 # Load variables from a .env file in the current directory (if present).
 load_dotenv()
 
-MODEL = "llama-3.3-70b-versatile"
+# Groq recommends GPT-OSS 120B as the replacement for the deprecated
+# llama-3.3-70b-versatile model. Override this per environment when needed,
+# for example: GROQ_MODEL=qwen/qwen3.6-27b
+MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 MAX_TOKENS = 4096
 MAX_TOOL_ITERATIONS = 15  # safety cap so a stuck loop can't run forever
 DEFAULT_TEMPERATURE = 0.2  # lower temperature = more reliable tool-call formatting

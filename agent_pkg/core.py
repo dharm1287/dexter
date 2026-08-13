@@ -11,6 +11,22 @@ from .schema import TOOLS, SYSTEM_PROMPT
 from .tools import ProjectTools
 
 
+def _text_only_history(history: list) -> list:
+    """Convert native tool messages into plain chat context for recovery."""
+    text_history = []
+    for message in history:
+        role = message["role"]
+        content = message.get("content") or ""
+
+        if role == "tool":
+            text_history.append(
+                {"role": "user", "content": f"Tool result from earlier work:\n{content}"}
+            )
+        elif role in ("user", "assistant") and content:
+            text_history.append({"role": role, "content": content})
+    return text_history
+
+
 def dispatch_tool_call(tools: ProjectTools, name: str, arguments: dict) -> str:
     """Run the requested tool and return its string result."""
     try:
@@ -26,7 +42,7 @@ def dispatch_tool_call(tools: ProjectTools, name: str, arguments: dict) -> str:
         return f"Error running tool '{name}': {e}"
 
 
-def _create_completion_with_retry(client: Groq, messages: list):
+def _create_completion_with_retry(client: Groq, messages: list, *, enable_tools: bool = True):
     """Call the Groq chat completion API, retrying at a lower temperature
     if the model emits a malformed tool call (a known occasional issue
     with some models, surfaced by Groq as a 400 tool_use_failed error)."""
@@ -35,15 +51,24 @@ def _create_completion_with_retry(client: Groq, messages: list):
 
     for attempt in range(1 + config.MAX_TOOL_CALL_RETRIES):
         try:
-            return client.chat.completions.create(
-                model=config.MODEL,
-                max_tokens=config.MAX_TOKENS,
-                temperature=temperature,
-                messages=messages,
-                tools=TOOLS,
-                tool_choice="auto",
-            )
+            request = {
+                "model": config.MODEL,
+                "max_tokens": config.MAX_TOKENS,
+                "temperature": temperature,
+                "messages": messages,
+            }
+            if enable_tools:
+                request.update(
+                    tools=TOOLS,
+                    tool_choice="auto",
+                    # Keep tool requests serial: the default model does not support
+                    # parallel tool calls, and this also keeps file operations ordered.
+                    parallel_tool_calls=False,
+                )
+            return client.chat.completions.create(**request)
         except groq.BadRequestError as e:
+            if not enable_tools:
+                raise
             body = getattr(e, "body", None) or {}
             code = (body.get("error") or {}).get("code") if isinstance(body, dict) else None
             if code != "tool_use_failed":
@@ -70,12 +95,26 @@ def run_agent(client: Groq, tools: ProjectTools, user_message: str, history: lis
                 client, [{"role": "system", "content": SYSTEM_PROMPT}] + history
             )
         except groq.BadRequestError:
-            print(
-                "\n[Error] The model repeatedly failed to format a tool call "
-                "correctly, even after retrying. Try rephrasing your request "
-                "more specifically (e.g. name the exact file), or try again."
+            # The conversation itself may still be answerable without another
+            # file operation. Fall back to text-only mode instead of losing the
+            # user's turn when the provider rejects malformed tool-call JSON.
+            print("\n[warning] Tool-call formatting failed; retrying without tools.")
+            fallback_prompt = (
+                SYSTEM_PROMPT
+                + " The tool interface is temporarily unavailable. Do not attempt "
+                "to use tools. Answer only from the conversation context; if the "
+                "request requires inspecting or changing files, say that clearly."
             )
-            break
+            try:
+                response = _create_completion_with_retry(
+                    client,
+                    [{"role": "system", "content": fallback_prompt}]
+                    + _text_only_history(history),
+                    enable_tools=False,
+                )
+            except groq.BadRequestError:
+                print("\n[Error] The model could not complete this request. Try again.")
+                break
 
         message = response.choices[0].message
 
