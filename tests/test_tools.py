@@ -50,3 +50,46 @@ class RunCommandTests(unittest.TestCase):
     def test_blocks_working_directory_escape(self):
         with self.assertRaises(ValueError):
             self.tools.run_command(["python", "-m", "compileall"], "..")
+
+
+class PatchFileTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.tools = ProjectTools(self.temp_dir.name)
+        Path(self.temp_dir.name, "example.txt").write_text(
+            "one\ntwo\nthree\n", encoding="utf-8"
+        )
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_applies_unified_diff_and_reports_summary(self):
+        result = self.tools.patch_file(
+            "example.txt",
+            "@@ -1,3 +1,4 @@\n one\n-two\n+two updated\n+two and a half\n three",
+        )
+
+        self.assertEqual("Applied patch to 'example.txt': +2 lines, -1 lines.", result)
+        self.assertEqual(
+            "one\ntwo updated\ntwo and a half\nthree\n",
+            Path(self.temp_dir.name, "example.txt").read_text(encoding="utf-8"),
+        )
+
+    def test_rejects_stale_patch_without_changing_file(self):
+        with self.assertRaisesRegex(ValueError, "no longer matches"):
+            self.tools.patch_file("example.txt", "@@ -1 +1 @@\n-not one\n+replacement")
+
+        self.assertEqual(
+            "one\ntwo\nthree\n",
+            Path(self.temp_dir.name, "example.txt").read_text(encoding="utf-8"),
+        )
+
+    def test_applies_standard_empty_file_addition(self):
+        Path(self.temp_dir.name, "empty.txt").write_text("", encoding="utf-8")
+
+        self.tools.patch_file("empty.txt", "@@ -0,0 +1 @@\n+first line")
+
+        self.assertEqual(
+            "first line",
+            Path(self.temp_dir.name, "empty.txt").read_text(encoding="utf-8"),
+        )

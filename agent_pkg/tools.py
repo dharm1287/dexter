@@ -1,6 +1,7 @@
 """Project tools sandboxed to a single project directory."""
 
 from pathlib import Path
+import re
 import subprocess
 
 from . import config
@@ -14,6 +15,7 @@ _DIRECT_COMMANDS = {"pytest", "ruff", "mypy", "flake8", "black", "git"}
 _PYTHON_MODULES = {"pytest", "unittest", "compileall"}
 _NODE_SCRIPT_ACTIONS = {"test", "run"}
 _NODE_SCRIPT_NAMES = {"test", "lint", "build", "check", "typecheck", "format"}
+_HUNK_HEADER = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 
 
 class ProjectTools:
@@ -55,6 +57,110 @@ class ProjectTools:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         return f"Wrote {len(content)} characters to '{path}'."
+
+    def patch_file(self, path: str, patch: str) -> str:
+        """Apply a unified diff to an existing project file.
+
+        The path is supplied separately so diff headers cannot redirect the
+        edit to another file. Every context/removal line must match exactly;
+        this prevents a stale patch from silently changing the wrong code.
+        """
+        target = self._resolve(path)
+        if not target.is_file():
+            return f"Error: file '{path}' does not exist."
+        if not isinstance(patch, str) or not patch.strip():
+            raise ValueError("Patch must be a non-empty unified diff.")
+
+        original = target.read_text(encoding="utf-8")
+        newline = "\r\n" if "\r\n" in original else "\n"
+        had_final_newline = original.endswith(("\n", "\r"))
+        source_lines = original.splitlines()
+        patch_lines = patch.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+
+        # File headers are optional because the explicit path is authoritative.
+        while patch_lines and (patch_lines[0].startswith("--- ") or patch_lines[0].startswith("+++ ")):
+            patch_lines.pop(0)
+
+        result_lines = []
+        source_cursor = 0
+        additions = deletions = 0
+        index = 0
+        saw_hunk = False
+
+        while index < len(patch_lines):
+            header = _HUNK_HEADER.match(patch_lines[index])
+            if not header:
+                if patch_lines[index] == "":
+                    index += 1
+                    continue
+                raise ValueError(f"Invalid unified-diff hunk header: {patch_lines[index]!r}")
+
+            saw_hunk = True
+            old_start = int(header.group(1))
+            old_count = int(header.group(2) or "1")
+            new_start = int(header.group(3))
+            new_count = int(header.group(4) or "1")
+            if (
+                old_start < 0
+                or new_start < 0
+                or old_count < 0
+                or new_count < 0
+                or (old_start == 0 and old_count != 0)
+                or (new_start == 0 and new_count != 0)
+            ):
+                raise ValueError("Invalid line range in unified-diff hunk.")
+            expected_cursor = 0 if old_start == 0 else old_start - 1
+            if expected_cursor < source_cursor or expected_cursor > len(source_lines):
+                raise ValueError("Patch hunks are out of order or outside the file.")
+
+            result_lines.extend(source_lines[source_cursor:expected_cursor])
+            source_cursor = expected_cursor
+            index += 1
+            old_seen = 0
+            new_seen = 0
+
+            while index < len(patch_lines) and not _HUNK_HEADER.match(patch_lines[index]):
+                line = patch_lines[index]
+                index += 1
+                if line == "\\ No newline at end of file":
+                    continue
+                if not line or line[0] not in " +-":
+                    raise ValueError(f"Invalid unified-diff line: {line!r}")
+
+                marker, content = line[0], line[1:]
+                if marker in " -":
+                    if source_cursor >= len(source_lines) or source_lines[source_cursor] != content:
+                        raise ValueError(
+                            f"Patch no longer matches '{path}' at line {source_cursor + 1}."
+                        )
+                    source_cursor += 1
+                    old_seen += 1
+                if marker in " +":
+                    result_lines.append(content)
+                    new_seen += 1
+                if marker == "+":
+                    additions += 1
+                elif marker == "-":
+                    deletions += 1
+
+            if old_seen != old_count:
+                raise ValueError(
+                    f"Hunk expected {old_count} original lines but contains {old_seen}."
+                )
+            if new_seen != new_count:
+                raise ValueError(
+                    f"Hunk expected {new_count} updated lines but contains {new_seen}."
+                )
+
+        if not saw_hunk:
+            raise ValueError("Patch does not contain a unified-diff hunk.")
+
+        result_lines.extend(source_lines[source_cursor:])
+        updated = newline.join(result_lines)
+        if result_lines and had_final_newline:
+            updated += newline
+        target.write_text(updated, encoding="utf-8", newline="")
+        return f"Applied patch to '{path}': +{additions} lines, -{deletions} lines."
 
     def _validate_command(self, command: list[str]) -> None:
         if not command or not all(isinstance(part, str) and part for part in command):

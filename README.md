@@ -6,7 +6,7 @@ A lightweight command-line coding agent powered by the [Groq API](https://consol
 
 - Interactive terminal chat loop
 - Groq-powered tool calling using `llama-3.3-70b-versatile`
-- Sandboxed `list_files`, `read_file`, `write_file`, and `run_command` tools
+- Sandboxed `list_files`, `read_file`, `write_file`, `patch_file`, and `run_command` tools
 - Approved command execution for tests, linters, builds, and read-only Git checks
 - File access restricted to the directory supplied at launch
 - Retry handling for malformed model tool calls
@@ -81,6 +81,7 @@ agent_pkg/
 
 - The agent resolves all tool paths relative to the selected project directory and rejects paths that escape it.
 - It can overwrite files when the model calls `write_file`; use a version-controlled project and review changes before committing.
+- `patch_file` applies unified-diff hunks to an existing file and refuses patches whose context no longer matches, preventing stale edits from being applied silently.
 - `run_command` accepts an argument array rather than a shell string and only permits common test, lint, build, and read-only Git commands. It runs inside the selected project directory, times out after two minutes, and truncates large output.
 - Each instruction is capped at 15 tool-call iterations to prevent runaway loops.
 - If Groq rejects a malformed tool call, the agent retries with the prior tool
