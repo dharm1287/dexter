@@ -36,6 +36,8 @@ def dispatch_tool_call(tools: ProjectTools, name: str, arguments: dict) -> str:
             return tools.read_file(arguments["path"])
         elif name == "write_file":
             return tools.write_file(arguments["path"], arguments["content"])
+        elif name == "run_command":
+            return tools.run_command(arguments["command"], arguments.get("path", "."))
         else:
             return f"Error: unknown tool '{name}'"
     except Exception as e:

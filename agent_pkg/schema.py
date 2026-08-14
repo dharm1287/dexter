@@ -47,12 +47,36 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_command",
+            "description": "Run an approved test, lint, build, or read-only Git command in the project. Commands are argument arrays, not shell strings.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "For example: [\"python\", \"-m\", \"pytest\"] or [\"npm\", \"run\", \"build\"].",
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "Relative working directory, defaults to the project root.",
+                    },
+                },
+                "required": ["command"],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = (
     "You are a careful, concise coding agent. You have tools to list, read, "
-    "and write files inside a project directory. Use them as needed to "
+    "and write files inside a project directory, plus a limited command tool "
+    "for tests, linters, builds, and read-only Git inspection. Use them as needed to "
     "understand existing code before changing it. Explain briefly what you "
     "did after finishing. Always write complete, working file contents when "
-    "using write_file (no partial diffs)."
+    "using write_file (no partial diffs). Use run_command after changes when a "
+    "relevant permitted test or check is available."
 )

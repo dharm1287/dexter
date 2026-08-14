@@ -17,6 +17,11 @@ DEFAULT_TEMPERATURE = 0.2  # lower temperature = more reliable tool-call formatt
 TOOL_CALL_RETRY_TEMPERATURE = 0.0  # used when a tool call fails to parse
 MAX_TOOL_CALL_RETRIES = 2
 
+# Commands executed by the agent are intentionally short lived and their output
+# is capped so a noisy test suite cannot flood the conversation history.
+COMMAND_TIMEOUT_SECONDS = 120
+COMMAND_OUTPUT_LIMIT = 30_000
+
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 
