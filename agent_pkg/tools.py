@@ -1,5 +1,6 @@
 """Project tools sandboxed to a single project directory."""
 
+import json
 from pathlib import Path
 import re
 import subprocess
@@ -221,3 +222,48 @@ class ProjectTools:
         if len(output) > config.COMMAND_OUTPUT_LIMIT:
             output = output[:config.COMMAND_OUTPUT_LIMIT] + "\n[Output truncated.]"
         return f"Exit code: {completed.returncode}\n{output}"
+
+    def _detect_test_command(self, directory: Path) -> list[str] | None:
+        """Return the safest conventional test command for a project directory."""
+        package_file = directory / "package.json"
+        if package_file.is_file():
+            try:
+                package = json.loads(package_file.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as error:
+                raise ValueError(f"Could not parse package.json: {error.msg}") from error
+            if isinstance(package.get("scripts"), dict) and isinstance(
+                package["scripts"].get("test"), str
+            ):
+                return ["npm", "test"]
+
+        pytest_configs = ("pytest.ini", "tox.ini")
+        if any((directory / name).is_file() for name in pytest_configs):
+            return ["python", "-m", "pytest"]
+
+        pyproject = directory / "pyproject.toml"
+        if pyproject.is_file() and "pytest" in pyproject.read_text(encoding="utf-8").lower():
+            return ["python", "-m", "pytest"]
+
+        if (directory / "tests").is_dir():
+            return ["python", "-m", "unittest", "discover", "-s", "tests"]
+
+        if any(directory.glob("test_*.py")):
+            return ["python", "-m", "unittest", "discover"]
+
+        return None
+
+    def run_tests(self, path: str = ".") -> str:
+        """Detect and run a project's conventional test command."""
+        directory = self._resolve(path)
+        if not directory.is_dir():
+            raise ValueError(f"Working directory '{path}' is not a directory.")
+
+        command = self._detect_test_command(directory)
+        if command is None:
+            return (
+                "No supported test setup was found. Add a tests/ directory, a pytest "
+                "configuration, or a package.json test script, or use run_command."
+            )
+
+        rendered_command = " ".join(command)
+        return f"Detected test command: {rendered_command}\n{self.run_command(command, path)}"

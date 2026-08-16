@@ -5,6 +5,7 @@ import sys
 import types
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 # The tool tests do not use environment loading.  Provide this tiny stand-in so
 # they remain runnable in a bare Python installation; normal application use
@@ -93,3 +94,34 @@ class PatchFileTests(unittest.TestCase):
             "first line",
             Path(self.temp_dir.name, "empty.txt").read_text(encoding="utf-8"),
         )
+
+
+class RunTestsTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.tools = ProjectTools(self.temp_dir.name)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_detects_unittest_tests_directory(self):
+        Path(self.temp_dir.name, "tests").mkdir()
+
+        with patch.object(self.tools, "run_command", return_value="Exit code: 0\nOK") as run:
+            result = self.tools.run_tests()
+
+        run.assert_called_once_with(["python", "-m", "unittest", "discover", "-s", "tests"], ".")
+        self.assertIn("Detected test command: python -m unittest discover -s tests", result)
+
+    def test_prefers_npm_test_script(self):
+        Path(self.temp_dir.name, "package.json").write_text(
+            '{"scripts": {"test": "vitest run"}}', encoding="utf-8"
+        )
+
+        with patch.object(self.tools, "run_command", return_value="Exit code: 0\nOK") as run:
+            self.tools.run_tests()
+
+        run.assert_called_once_with(["npm", "test"], ".")
+
+    def test_reports_when_no_supported_tests_exist(self):
+        self.assertIn("No supported test setup", self.tools.run_tests())

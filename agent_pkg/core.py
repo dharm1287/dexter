@@ -40,6 +40,8 @@ def dispatch_tool_call(tools: ProjectTools, name: str, arguments: dict) -> str:
             return tools.patch_file(arguments["path"], arguments["patch"])
         elif name == "run_command":
             return tools.run_command(arguments["command"], arguments.get("path", "."))
+        elif name == "run_tests":
+            return tools.run_tests(arguments.get("path", "."))
         else:
             return f"Error: unknown tool '{name}'"
     except Exception as e:

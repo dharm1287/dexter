@@ -21,6 +21,22 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "run_tests",
+            "description": "Detect and run the project's conventional test suite (npm test, pytest, or unittest discovery).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Relative project directory to test, defaults to the project root.",
+                    }
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "patch_file",
             "description": "Apply a unified diff to an existing file. Use this for small, targeted edits instead of rewriting a whole file.",
             "parameters": {
@@ -95,6 +111,7 @@ SYSTEM_PROMPT = (
     "for tests, linters, builds, and read-only Git inspection. Use them as needed to "
     "understand existing code before changing it. Explain briefly what you "
     "did after finishing. Prefer patch_file for focused edits to existing files; "
-    "use write_file for new files or complete replacements. Use run_command after changes when a "
-    "relevant permitted test or check is available."
+    "use write_file for new files or complete replacements. After code changes, use "
+    "run_tests when possible. If tests fail, inspect the output, fix the relevant "
+    "problem, and rerun them before finishing."
 )
