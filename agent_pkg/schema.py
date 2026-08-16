@@ -21,6 +21,37 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "find_files",
+            "description": "Find files whose relative paths contain the query. Skips dependency and generated folders.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Filename or path fragment to find."},
+                    "path": {"type": "string", "description": "Relative directory to search, defaults to the project root."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_code",
+            "description": "Search text files for a string and return matching file paths and line numbers. Skips binary, oversized, dependency, and generated files.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Single-line text to search for."},
+                    "path": {"type": "string", "description": "Relative directory to search, defaults to the project root."},
+                    "case_sensitive": {"type": "boolean", "description": "Whether matching must respect case; defaults to false."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "run_tests",
             "description": "Detect and run the project's conventional test suite (npm test, pytest, or unittest discovery).",
             "parameters": {
@@ -106,10 +137,11 @@ TOOLS = [
 ]
 
 SYSTEM_PROMPT = (
-    "You are a careful, concise coding agent. You have tools to list, read, "
+    "You are a careful, concise coding agent. You have tools to list, search, read, "
     "and edit files with targeted unified diffs, plus a limited command tool "
     "for tests, linters, builds, and read-only Git inspection. Use them as needed to "
-    "understand existing code before changing it. Explain briefly what you "
+    "understand existing code before changing it. Prefer find_files or search_code "
+    "over listing a large project. Explain briefly what you "
     "did after finishing. Prefer patch_file for focused edits to existing files; "
     "use write_file for new files or complete replacements. After code changes, use "
     "run_tests when possible. If tests fail, inspect the output, fix the relevant "

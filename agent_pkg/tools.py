@@ -1,6 +1,7 @@
 """Project tools sandboxed to a single project directory."""
 
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -17,6 +18,7 @@ _PYTHON_MODULES = {"pytest", "unittest", "compileall"}
 _NODE_SCRIPT_ACTIONS = {"test", "run"}
 _NODE_SCRIPT_NAMES = {"test", "lint", "build", "check", "typecheck", "format"}
 _HUNK_HEADER = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+_SEARCH_IGNORED_DIRECTORIES = {".git", "__pycache__", "node_modules", ".venv", "venv"}
 
 
 class ProjectTools:
@@ -43,6 +45,76 @@ class ProjectTools:
                 continue
             entries.append(str(p.relative_to(self.root)))
         return "\n".join(entries) if entries else "(empty)"
+
+    def _iter_searchable_files(self, directory: Path):
+        """Yield project-contained files while pruning common generated folders."""
+        for root, directories, files in os.walk(directory):
+            root_path = Path(root)
+            directories[:] = [
+                name
+                for name in directories
+                if name not in _SEARCH_IGNORED_DIRECTORIES
+                and not (root_path / name / "pyvenv.cfg").is_file()
+            ]
+            for name in files:
+                candidate = Path(root, name)
+                resolved = candidate.resolve()
+                if self.root in resolved.parents:
+                    yield candidate
+
+    @staticmethod
+    def _validate_search_query(query: str) -> None:
+        if not isinstance(query, str) or not query:
+            raise ValueError("Search query must be a non-empty string.")
+        if "\n" in query or "\r" in query:
+            raise ValueError("Search query must be a single line.")
+
+    def find_files(self, query: str, path: str = ".") -> str:
+        """Find project files whose relative path contains a query string."""
+        self._validate_search_query(query)
+        directory = self._resolve(path)
+        if not directory.is_dir():
+            raise ValueError(f"Search path '{path}' is not a directory.")
+
+        needle = query.casefold()
+        matches = []
+        for candidate in self._iter_searchable_files(directory):
+            relative = candidate.relative_to(self.root).as_posix()
+            if needle in relative.casefold():
+                matches.append(relative)
+                if len(matches) == config.SEARCH_RESULT_LIMIT:
+                    return "\n".join(matches) + "\n[Results truncated.]"
+        return "\n".join(matches) if matches else "No matching files."
+
+    def search_code(self, query: str, path: str = ".", case_sensitive: bool = False) -> str:
+        """Search text files and return matching path, line number, and line text."""
+        self._validate_search_query(query)
+        if not isinstance(case_sensitive, bool):
+            raise ValueError("case_sensitive must be true or false.")
+        directory = self._resolve(path)
+        if not directory.is_dir():
+            raise ValueError(f"Search path '{path}' is not a directory.")
+
+        needle = query if case_sensitive else query.casefold()
+        matches = []
+        for candidate in self._iter_searchable_files(directory):
+            try:
+                if candidate.stat().st_size > config.SEARCH_FILE_SIZE_LIMIT:
+                    continue
+                content = candidate.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            if "\0" in content:
+                continue
+
+            relative = candidate.relative_to(self.root).as_posix()
+            for line_number, line in enumerate(content.splitlines(), start=1):
+                haystack = line if case_sensitive else line.casefold()
+                if needle in haystack:
+                    matches.append(f"{relative}:{line_number}: {line}")
+                    if len(matches) == config.SEARCH_RESULT_LIMIT:
+                        return "\n".join(matches) + "\n[Results truncated.]"
+        return "\n".join(matches) if matches else "No matches."
 
     def read_file(self, path: str) -> str:
         target = self._resolve(path)

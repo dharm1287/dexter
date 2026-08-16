@@ -6,7 +6,8 @@ A lightweight command-line coding agent powered by the [Groq API](https://consol
 
 - Interactive terminal chat loop
 - Groq-powered tool calling using `llama-3.3-70b-versatile`
-- Sandboxed `list_files`, `read_file`, `write_file`, `patch_file`, `run_command`, and `run_tests` tools
+- Sandboxed `list_files`, `find_files`, `search_code`, `read_file`, `write_file`, `patch_file`, `run_command`, and `run_tests` tools
+- Fast bounded filename and text search with line-numbered results
 - Approved command execution for tests, linters, builds, and read-only Git checks
 - Automatic test detection for `npm test`, `pytest`, and Python `unittest`
 - File access restricted to the directory supplied at launch
@@ -81,6 +82,7 @@ agent_pkg/
 ## Safety and limits
 
 - The agent resolves all tool paths relative to the selected project directory and rejects paths that escape it.
+- Search skips `.git`, virtual environments, `node_modules`, and Python cache directories. Text search also skips binary files and files larger than 1 MB.
 - It can overwrite files when the model calls `write_file`; use a version-controlled project and review changes before committing.
 - `patch_file` applies unified-diff hunks to an existing file and refuses patches whose context no longer matches, preventing stale edits from being applied silently.
 - `run_command` accepts an argument array rather than a shell string and only permits common test, lint, build, and read-only Git commands. It runs inside the selected project directory, times out after two minutes, and truncates large output.

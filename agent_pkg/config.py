@@ -21,6 +21,8 @@ MAX_TOOL_CALL_RETRIES = 2
 # is capped so a noisy test suite cannot flood the conversation history.
 COMMAND_TIMEOUT_SECONDS = 120
 COMMAND_OUTPUT_LIMIT = 30_000
+SEARCH_RESULT_LIMIT = 100
+SEARCH_FILE_SIZE_LIMIT = 1_000_000
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 

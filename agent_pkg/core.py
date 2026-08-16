@@ -32,6 +32,14 @@ def dispatch_tool_call(tools: ProjectTools, name: str, arguments: dict) -> str:
     try:
         if name == "list_files":
             return tools.list_files(arguments.get("path", "."))
+        elif name == "find_files":
+            return tools.find_files(arguments["query"], arguments.get("path", "."))
+        elif name == "search_code":
+            return tools.search_code(
+                arguments["query"],
+                arguments.get("path", "."),
+                arguments.get("case_sensitive", False),
+            )
         elif name == "read_file":
             return tools.read_file(arguments["path"])
         elif name == "write_file":

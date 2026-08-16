@@ -53,6 +53,47 @@ class RunCommandTests(unittest.TestCase):
             self.tools.run_command(["python", "-m", "compileall"], "..")
 
 
+class SearchToolsTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.tools = ProjectTools(self.temp_dir.name)
+        Path(self.temp_dir.name, "src").mkdir()
+        Path(self.temp_dir.name, "src", "Agent.py").write_text(
+            "def launch_agent():\n    return 'ready'\n", encoding="utf-8"
+        )
+        Path(self.temp_dir.name, "node_modules").mkdir()
+        Path(self.temp_dir.name, "node_modules", "hidden.py").write_text(
+            "launch_agent()\n", encoding="utf-8"
+        )
+        Path(self.temp_dir.name, "custom-python").mkdir()
+        Path(self.temp_dir.name, "custom-python", "pyvenv.cfg").write_text("", encoding="utf-8")
+        Path(self.temp_dir.name, "custom-python", "hidden.py").write_text(
+            "launch_agent()\n", encoding="utf-8"
+        )
+        Path(self.temp_dir.name, "binary.dat").write_bytes(b"launch_agent\0")
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_finds_files_case_insensitively_and_skips_dependencies(self):
+        self.assertEqual("src/Agent.py", self.tools.find_files("agent"))
+        self.assertEqual("No matching files.", self.tools.find_files("hidden"))
+
+    def test_searches_text_with_line_numbers_and_case_option(self):
+        self.assertEqual(
+            "src/Agent.py:1: def launch_agent():",
+            self.tools.search_code("LAUNCH_AGENT"),
+        )
+        self.assertEqual("No matches.", self.tools.search_code("LAUNCH_AGENT", case_sensitive=True))
+        self.assertEqual("No matches.", self.tools.search_code("launch_agent\0"))
+
+    def test_rejects_empty_or_multiline_queries(self):
+        with self.assertRaises(ValueError):
+            self.tools.find_files("")
+        with self.assertRaises(ValueError):
+            self.tools.search_code("line one\nline two")
+
+
 class PatchFileTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
