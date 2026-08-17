@@ -71,6 +71,9 @@ class SearchToolsTests(unittest.TestCase):
             "launch_agent()\n", encoding="utf-8"
         )
         Path(self.temp_dir.name, "binary.dat").write_bytes(b"launch_agent\0")
+        Path(self.temp_dir.name, ".my-coding-agent-session.json").write_text(
+            "launch_agent", encoding="utf-8"
+        )
 
     def tearDown(self):
         self.temp_dir.cleanup()
@@ -78,6 +81,7 @@ class SearchToolsTests(unittest.TestCase):
     def test_finds_files_case_insensitively_and_skips_dependencies(self):
         self.assertEqual("src/Agent.py", self.tools.find_files("agent"))
         self.assertEqual("No matching files.", self.tools.find_files("hidden"))
+        self.assertEqual("No matching files.", self.tools.find_files("session"))
 
     def test_searches_text_with_line_numbers_and_case_option(self):
         self.assertEqual(

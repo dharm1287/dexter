@@ -41,7 +41,7 @@ class ProjectTools:
             return f"Error: '{path}' does not exist."
         entries = []
         for p in sorted(target.rglob("*")):
-            if any(part.startswith(".git") for part in p.parts):
+            if any(part.startswith(".git") for part in p.parts) or p.name == config.SESSION_FILENAME:
                 continue
             entries.append(str(p.relative_to(self.root)))
         return "\n".join(entries) if entries else "(empty)"
@@ -58,6 +58,8 @@ class ProjectTools:
             ]
             for name in files:
                 candidate = Path(root, name)
+                if candidate.name == config.SESSION_FILENAME:
+                    continue
                 resolved = candidate.resolve()
                 if self.root in resolved.parents:
                     yield candidate

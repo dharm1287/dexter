@@ -10,6 +10,7 @@ A lightweight command-line coding agent powered by the [Groq API](https://consol
 - Fast bounded filename and text search with line-numbered results
 - Approved command execution for tests, linters, builds, and read-only Git checks
 - Automatic test detection for `npm test`, `pytest`, and Python `unittest`
+- Project-local session persistence, with `/reset` and `--new-session` controls
 - File access restricted to the directory supplied at launch
 - Retry handling for malformed model tool calls
 
@@ -55,6 +56,10 @@ For example:
 python agent.py ./newproject
 ```
 
+By default, the agent restores the conversation from `.my-coding-agent-session.json`
+inside that project and saves after each completed instruction. Use `--new-session`
+to ignore the saved conversation for one launch, or enter `/reset` to delete it.
+
 Then enter a task at the prompt, such as:
 
 ```text
@@ -82,6 +87,7 @@ agent_pkg/
 ## Safety and limits
 
 - The agent resolves all tool paths relative to the selected project directory and rejects paths that escape it.
+- Conversation history is saved as `.my-coding-agent-session.json` in the selected project. It may contain prompts, source snippets, and tool results, so do not commit it or use it for projects containing information you do not want persisted.
 - Search skips `.git`, virtual environments, `node_modules`, and Python cache directories. Text search also skips binary files and files larger than 1 MB.
 - It can overwrite files when the model calls `write_file`; use a version-controlled project and review changes before committing.
 - `patch_file` applies unified-diff hunks to an existing file and refuses patches whose context no longer matches, preventing stale edits from being applied silently.

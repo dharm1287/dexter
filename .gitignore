@@ -2,3 +2,5 @@
 .env
 # Ignore Python bytecode
 *.pyc
+# Ignore saved agent conversations
+.my-coding-agent-session.json
