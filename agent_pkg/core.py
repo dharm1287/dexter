@@ -2,6 +2,7 @@
 tool calls, and feeds results back until the model is done responding."""
 
 import json
+from typing import Optional
 
 import groq
 from groq import Groq
@@ -9,6 +10,12 @@ from groq import Groq
 from . import config
 from .schema import TOOLS, SYSTEM_PROMPT
 from .tools import ProjectTools
+
+
+PLANNING_PROMPT = """You are preparing a coding plan for approval. Do not use tools or
+claim that you inspected files. Respond with a concise plan of 3-6 numbered steps,
+including expected files to inspect or change, validation, and any assumptions or
+risks. Do not begin implementation; wait for explicit approval."""
 
 
 def _text_only_history(history: list) -> list:
@@ -98,10 +105,26 @@ def _create_completion_with_retry(client: Groq, messages: list, *, enable_tools:
     raise last_error
 
 
-def run_agent(client: Groq, tools: ProjectTools, user_message: str, history: list) -> list:
+def propose_plan(client: Groq, history: list, user_message: str) -> str:
+    """Generate a tool-free implementation plan for the user's approval."""
+    response = _create_completion_with_retry(
+        client,
+        [{"role": "system", "content": PLANNING_PROMPT}]
+        + _text_only_history(history)
+        + [{"role": "user", "content": user_message}],
+        enable_tools=False,
+    )
+    return response.choices[0].message.content or "No plan was returned."
+
+
+def run_agent(
+    client: Groq, tools: ProjectTools, user_message: Optional[str], history: list
+) -> list:
     """Send one user message through the agent loop, mutating and
-    returning the updated conversation history."""
-    history.append({"role": "user", "content": user_message})
+    returning the updated conversation history. Pass None when the user's
+    request has already been recorded, such as after approval mode planning."""
+    if user_message is not None:
+        history.append({"role": "user", "content": user_message})
 
     for _ in range(config.MAX_TOOL_ITERATIONS):
         try:

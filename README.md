@@ -11,6 +11,7 @@ A lightweight command-line coding agent powered by the [Groq API](https://consol
 - Approved command execution for tests, linters, builds, and read-only Git checks
 - Automatic test detection for `npm test`, `pytest`, and Python `unittest`
 - Project-local session persistence, with `/reset` and `--new-session` controls
+- Optional plan/approval mode for explicit review before agent actions
 - File access restricted to the directory supplied at launch
 - Retry handling for malformed model tool calls
 
@@ -56,9 +57,16 @@ For example:
 python agent.py ./newproject
 ```
 
+To require a concise plan and explicit confirmation before each instruction runs:
+
+```bash
+python agent.py ./newproject --approval-mode
+```
+
 By default, the agent restores the conversation from `.my-coding-agent-session.json`
 inside that project and saves after each completed instruction. Use `--new-session`
 to ignore the saved conversation for one launch, or enter `/reset` to delete it.
+Enter `/approval` during a session to turn plan approval on or off.
 
 Then enter a task at the prompt, such as:
 
@@ -87,6 +95,7 @@ agent_pkg/
 ## Safety and limits
 
 - The agent resolves all tool paths relative to the selected project directory and rejects paths that escape it.
+- In plan/approval mode, the agent creates a tool-free plan and cannot inspect or change the project until you confirm it.
 - Conversation history is saved as `.my-coding-agent-session.json` in the selected project. It may contain prompts, source snippets, and tool results, so do not commit it or use it for projects containing information you do not want persisted.
 - Search skips `.git`, virtual environments, `node_modules`, and Python cache directories. Text search also skips binary files and files larger than 1 MB.
 - It can overwrite files when the model calls `write_file`; use a version-controlled project and review changes before committing.
