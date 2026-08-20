@@ -126,10 +126,14 @@ def run_agent(
     if user_message is not None:
         history.append({"role": "user", "content": user_message})
 
+    system_prompt = SYSTEM_PROMPT
+    if getattr(tools, "read_only", False):
+        system_prompt += " This is a read-only session: do not attempt edits or commands."
+
     for _ in range(config.MAX_TOOL_ITERATIONS):
         try:
             response = _create_completion_with_retry(
-                client, [{"role": "system", "content": SYSTEM_PROMPT}] + history
+                client, [{"role": "system", "content": system_prompt}] + history
             )
         except groq.BadRequestError:
             # The conversation itself may still be answerable without another
@@ -137,7 +141,7 @@ def run_agent(
             # user's turn when the provider rejects malformed tool-call JSON.
             print("\n[warning] Tool-call formatting failed; retrying without tools.")
             fallback_prompt = (
-                SYSTEM_PROMPT
+                system_prompt
                 + " The tool interface is temporarily unavailable. Do not attempt "
                 "to use tools. Answer only from the conversation context; if the "
                 "request requires inspecting or changing files, say that clearly."

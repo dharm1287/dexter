@@ -1,6 +1,7 @@
 """Configuration and environment setup for the coding agent."""
 
 import os
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -26,6 +27,22 @@ SEARCH_FILE_SIZE_LIMIT = 1_000_000
 SESSION_FILENAME = ".my-coding-agent-session.json"
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+
+
+def configure_runtime(
+    *,
+    model: Optional[str] = None,
+    temperature: Optional[float] = None,
+    max_tool_iterations: Optional[int] = None,
+) -> None:
+    """Apply validated per-launch CLI configuration overrides."""
+    global MODEL, DEFAULT_TEMPERATURE, MAX_TOOL_ITERATIONS
+    if model is not None:
+        MODEL = model
+    if temperature is not None:
+        DEFAULT_TEMPERATURE = temperature
+    if max_tool_iterations is not None:
+        MAX_TOOL_ITERATIONS = max_tool_iterations
 
 
 def require_api_key() -> None:

@@ -24,9 +24,10 @@ _SEARCH_IGNORED_DIRECTORIES = {".git", "__pycache__", "node_modules", ".venv", "
 class ProjectTools:
     """Read/write/list files within a fixed project directory only."""
 
-    def __init__(self, project_dir: str):
+    def __init__(self, project_dir: str, *, read_only: bool = False):
         self.root = Path(project_dir).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
+        self.read_only = read_only
 
     def _resolve(self, rel_path: str) -> Path:
         """Resolve a relative path, blocking escapes via '..' or absolute paths."""
@@ -128,6 +129,8 @@ class ProjectTools:
             return f"Error reading '{path}': {e}"
 
     def write_file(self, path: str, content: str) -> str:
+        if self.read_only:
+            raise PermissionError("write_file is disabled in read-only mode.")
         target = self._resolve(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
@@ -140,6 +143,8 @@ class ProjectTools:
         edit to another file. Every context/removal line must match exactly;
         this prevents a stale patch from silently changing the wrong code.
         """
+        if self.read_only:
+            raise PermissionError("patch_file is disabled in read-only mode.")
         target = self._resolve(path)
         if not target.is_file():
             return f"Error: file '{path}' does not exist."
@@ -267,6 +272,8 @@ class ProjectTools:
 
     def run_command(self, command: list[str], path: str = ".") -> str:
         """Run an approved test, lint, build, or read-only Git command."""
+        if self.read_only:
+            raise PermissionError("run_command is disabled in read-only mode.")
         self._validate_command(command)
         cwd = self._resolve(path)
         if not cwd.is_dir():

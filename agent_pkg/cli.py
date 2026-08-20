@@ -24,19 +24,40 @@ def main() -> None:
         action="store_true",
         help="Require approval of a plan before the agent can act on each instruction.",
     )
+    parser.add_argument("--auto-approve", action="store_true", help="Show each plan and approve it automatically.")
+    parser.add_argument("--model", help="Override the Groq model for this launch.")
+    parser.add_argument("--temperature", type=float, help="Sampling temperature from 0.0 to 2.0.")
+    parser.add_argument("--max-iterations", type=int, help="Maximum tool-call loops per instruction.")
+    parser.add_argument(
+        "--read-only",
+        action="store_true",
+        help="Disable edits and commands; allow only project inspection and search.",
+    )
     args = parser.parse_args()
+    if args.temperature is not None and not 0.0 <= args.temperature <= 2.0:
+        parser.error("--temperature must be between 0.0 and 2.0")
+    if args.max_iterations is not None and args.max_iterations < 1:
+        parser.error("--max-iterations must be at least 1")
 
     config.require_api_key()
+    config.configure_runtime(
+        model=args.model,
+        temperature=args.temperature,
+        max_tool_iterations=args.max_iterations,
+    )
 
     client = Groq()
-    tools = ProjectTools(args.project_dir)
+    tools = ProjectTools(args.project_dir, read_only=args.read_only)
     session = SessionStore(tools.root)
     history = [] if args.new_session else session.load()
-    approval_mode = args.approval_mode
+    approval_mode = args.approval_mode or args.auto_approve
 
     print(f"Coding agent ready. Project directory: {tools.root}")
     if history:
         print(f"Restored {len(history)} messages from the previous session.")
+    print(f"Model: {config.MODEL}; temperature: {config.DEFAULT_TEMPERATURE}; max iterations: {config.MAX_TOOL_ITERATIONS}")
+    if tools.read_only:
+        print("Read-only mode is enabled.")
     print(
         "Type an instruction, '/reset' to forget this session, '/approval' to toggle "
         "plan approval, or 'exit' to quit.\n"
@@ -73,11 +94,15 @@ def main() -> None:
                 continue
 
             print(f"\nPlan:\n{plan}\n")
-            try:
-                approved = input("Apply this plan? [y/N]: ").strip().lower() in {"y", "yes"}
-            except (KeyboardInterrupt, EOFError):
-                print("\nPlan not approved.\n")
-                continue
+            if args.auto_approve:
+                approved = True
+                print("Plan automatically approved.")
+            else:
+                try:
+                    approved = input("Apply this plan? [y/N]: ").strip().lower() in {"y", "yes"}
+                except (KeyboardInterrupt, EOFError):
+                    print("\nPlan not approved.\n")
+                    continue
             if not approved:
                 print("Plan not approved; no project actions were taken.\n")
                 continue

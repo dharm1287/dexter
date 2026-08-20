@@ -12,6 +12,7 @@ A lightweight command-line coding agent powered by the [Groq API](https://consol
 - Automatic test detection for `npm test`, `pytest`, and Python `unittest`
 - Project-local session persistence, with `/reset` and `--new-session` controls
 - Optional plan/approval mode for explicit review before agent actions
+- Per-launch CLI settings for model, temperature, iteration limits, and read-only mode
 - File access restricted to the directory supplied at launch
 - Retry handling for malformed model tool calls
 
@@ -62,6 +63,18 @@ To require a concise plan and explicit confirmation before each instruction runs
 ```bash
 python agent.py ./newproject --approval-mode
 ```
+
+Common runtime options:
+
+```bash
+python agent.py ./newproject --model qwen/qwen3.6-27b --temperature 0.1 --max-iterations 20
+python agent.py ./newproject --read-only
+python agent.py ./newproject --auto-approve
+```
+
+`--auto-approve` still displays a plan, but continues without prompting. In
+`--read-only` mode, file writes, patches, and commands are disabled, because a
+command that appears safe may still modify files.
 
 By default, the agent restores the conversation from `.my-coding-agent-session.json`
 inside that project and saves after each completed instruction. Use `--new-session`

@@ -52,6 +52,17 @@ class RunCommandTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.tools.run_command(["python", "-m", "compileall"], "..")
 
+    def test_read_only_mode_blocks_edits_and_commands(self):
+        tools = ProjectTools(self.temp_dir.name, read_only=True)
+        Path(self.temp_dir.name, "sample.txt").write_text("original\n", encoding="utf-8")
+
+        with self.assertRaises(PermissionError):
+            tools.write_file("new.txt", "new")
+        with self.assertRaises(PermissionError):
+            tools.patch_file("sample.txt", "@@ -1 +1 @@\n-original\n+changed")
+        with self.assertRaises(PermissionError):
+            tools.run_command(["python", "-m", "compileall"])
+
 
 class SearchToolsTests(unittest.TestCase):
     def setUp(self):
